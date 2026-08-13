@@ -113,12 +113,23 @@ esac
 # ── Deletes: permitted only INSIDE the agent's workspace ────────────────────
 case "$cmd_norm" in
   *" rm "*|*" -delete "*|*" -delete"|*" unlink "*)
-    case "$cmd_norm" in
-      *" sudo "*) deny "Deleting as root is ${OPERATOR}-only — route via a PR." ;;
-    esac
     del_segs="$(split_segments "$cmd_norm" | grep -E '(^|[[:space:]])(rm|unlink)([[:space:]]|$)|-delete|-exec[[:space:]]+rm' || true)"
     # Fail closed: if splitting yielded nothing while the trigger matched, scan all.
     [ -n "$del_segs" ] || del_segs="$cmd_norm"
+
+    # The sudo test runs against the DELETE SEGMENTS, not the whole line.
+    # It used to be whole-line, which denied any command that merely contained
+    # `sudo` anywhere alongside an unrelated `rm`. That produced repeat false
+    # positives across three sessions — most recently blocking
+    #   ssh host 'sudo -n cat file' > local ; ... ; rm -f /tmp/scratch
+    # where the sudo was a REMOTE read on another machine and the rm was my own
+    # scratch file. PR #100 scoped the PATH check this way and left this one
+    # behind; this completes that fix.
+    # A chained `ls && sudo rm /etc/x` is still caught, because the sudo lives
+    # in the same segment as the delete — which is the case that matters.
+    if printf '%s' "$del_segs" | grep -qE '(^|[[:space:]])sudo([[:space:]]|$)'; then
+      deny "Deleting as root is ${OPERATOR}-only — route via a PR."
+    fi
     scrub="$del_segs"
     for w in ${WRITABLE_PATHS[@]+"${WRITABLE_PATHS[@]}"}; do
       scrub="${scrub//"$w"/__WRITABLE__}"

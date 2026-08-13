@@ -48,3 +48,9 @@ pass	echo mentioning main	echo "merged to main"
 pass	read-only service inspection	sudo systemctl status librenms
 pass	read container logs	sudo docker logs netbox
 pass	read journal	journalctl -u ssh --since -1h
+deny	sudo rm of a system path	sudo rm -f /etc/hosts
+deny	sudo rm chained after a benign command	ls /tmp && sudo rm -rf /etc/netplan
+deny	sudo rm piped stage	echo x | sudo rm -f /etc/hosts
+deny	sudo rm of own file is still root-delete	sudo rm -f /home/claude/x
+pass	sudo in an UNRELATED stage, rm on own scratch	ssh host 'sudo -n cat /root/f' > /home/claude/out ; rm -f /home/claude/out
+pass	sudo read then unrelated own-file delete	sudo systemctl status nginx ; rm -f /home/claude/tmp.txt
