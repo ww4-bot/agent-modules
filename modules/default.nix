@@ -87,7 +87,18 @@ let
     allowManagedHooksOnly = true;
     permissions = {
       disableBypassPermissionsMode = "disable";
-      allow = [ "Read" "Grep" "Glob" "Edit" "Write" "WebSearch" "WebFetch" "Bash(*)" ];
+      allow = [ "Read" "Grep" "Glob" "Edit" "Write" "WebSearch" "WebFetch" "Bash(*)" ]
+        # MCP tools are NOT covered by the shell/file entries above, and with
+        # allowManagedPermissionRulesOnly = true a user-level grant cannot add
+        # them. Without this the agent connects to every MCP server and is then
+        # denied every call — which is what happened on agent-vm, where MCP is
+        # the entire reason the host exists.
+        #
+        # Server-level (`mcp__<name>`) rather than per-tool: the boundary that
+        # matters is enforced on the MCP host, where a forced command allows only
+        # an allowlisted server and the credentials never leave that machine.
+        # Re-enumerating every tool here would be duplicated policy that drifts.
+        ++ map (s: "mcp__${s}") cfg.allowedMcpServers;
       deny = [
         "Bash(sudo rm:*)" "Bash(shred:*)" "Bash(truncate:*)" "Bash(dd:*)"
         "Bash(mkfs:*)" "Bash(wipefs:*)" "Bash(fdisk:*)" "Bash(parted:*)"
@@ -152,6 +163,19 @@ in
         has no gate at all.
       '';
     };
+    allowedMcpServers = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [ "librenms" "netbox" ];
+      description = ''
+        MCP servers whose tools the agent may call, as server-level allow
+        rules (mcp__<name>). Required: the shell/file allow entries do NOT
+        cover MCP, and allowManagedPermissionRulesOnly means a user-level
+        grant cannot add them — the agent would connect to every server and
+        then be denied every call.
+      '';
+    };
+
     extraDeny = lib.mkOption {
       type = lib.types.listOf lib.types.str; default = [ ];
       description = "Extra Claude Code deny rules appended to the managed list.";
