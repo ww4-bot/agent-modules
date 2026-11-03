@@ -17,7 +17,7 @@
       # and importing it must not pull in a guard. Why and how: pkgs/secret-put.sh
       # and skills/step-by-step/SKILL.md §4.
       nixosModules.secret-put = { pkgs, ... }: {
-        environment.systemPackages = [ self.packages.${pkgs.system}.secret-put ];
+        environment.systemPackages = [ self.packages.${pkgs.stdenv.hostPlatform.system}.secret-put ];
       };
       packages = forAll (pkgs: {
         secret-put = pkgs.writeShellApplication {
@@ -47,7 +47,7 @@
       checks = forAll (pkgs:
         let
           eval = nixpkgs.lib.nixosSystem {
-            system = pkgs.system;
+            system = pkgs.stdenv.hostPlatform.system;
             modules = [
               self.nixosModules.agent
               ({ ... }: {
@@ -105,7 +105,7 @@
           secret-put = pkgs.runCommand "secret-put-matrix"
             { nativeBuildInputs = [ pkgs.bash pkgs.util-linux pkgs.coreutils pkgs.findutils pkgs.gnugrep ]; }
             ''
-              bash ${./tests/secret-put-test.sh} ${self.packages.${pkgs.system}.secret-put}/bin/secret-put $TMPDIR/sp | tee out.txt
+              bash ${./tests/secret-put-test.sh} ${self.packages.${pkgs.stdenv.hostPlatform.system}.secret-put}/bin/secret-put $TMPDIR/sp | tee out.txt
               grep -q 'fail=0' out.txt || { echo "SECRET-PUT MATRIX FAILED"; exit 1; }
               cp out.txt $out
             '';
