@@ -12,6 +12,33 @@
       nixosModules.agent = import ./modules;
       nixosModules.default = self.nixosModules.agent;
 
+      # secret-put — the one way to hand a secret to a host. Deliberately a
+      # separate module from `agent`: hosts with no agent on them want it too,
+      # and importing it must not pull in a guard. Why and how: pkgs/secret-put.sh
+      # and skills/step-by-step/SKILL.md §4.
+      nixosModules.secret-put = { pkgs, ... }: {
+        environment.systemPackages = [ self.packages.${pkgs.system}.secret-put ];
+      };
+      packages = forAll (pkgs: {
+        secret-put = pkgs.writeShellApplication {
+          name = "secret-put";
+          runtimeInputs = with pkgs; [ coreutils gnugrep gawk gnused ];
+          text = builtins.readFile ./pkgs/secret-put.sh;
+        };
+      });
+
+      # Shared skills. A consumer merges them with its own skills directory:
+      #   agent-modules.lib.mkSkills pkgs ./skills
+      # Local files are copied over the shared ones, so a host adds its site
+      # layer as ./skills/step-by-step/SITE.md and it lands beside the shared
+      # SKILL.md. One copy of the method; each site keeps its own facts.
+      lib.mkSkills = pkgs: local: pkgs.runCommand "claude-skills" { } ''
+        mkdir -p $out
+        cp -r ${./skills}/. $out/
+        chmod -R u+w $out
+        cp -r ${local}/. $out/
+      '';
+
       # `nix flake check` RUNS the adversarial matrix against a fully-rendered
       # guard. This is the point of the whole repo: the guard is a security
       # backstop, and a fence that has stopped firing looks exactly like a fence
@@ -73,6 +100,24 @@
 
               cp out.txt $out
             '';
+
+          # secret-put must behave exactly as SKILL.md §4 promises Chris.
+          secret-put = pkgs.runCommand "secret-put-matrix"
+            { nativeBuildInputs = [ pkgs.bash pkgs.util-linux pkgs.coreutils pkgs.findutils pkgs.gnugrep ]; }
+            ''
+              bash ${./tests/secret-put-test.sh} ${self.packages.${pkgs.system}.secret-put}/bin/secret-put $TMPDIR/sp | tee out.txt
+              grep -q 'fail=0' out.txt || { echo "SECRET-PUT MATRIX FAILED"; exit 1; }
+              cp out.txt $out
+            '';
+
+          # Every shared skill has frontmatter with a name and a description.
+          skills = pkgs.runCommand "skills-frontmatter" { } ''
+            for f in ${./skills}/*/SKILL.md; do
+              head -1 "$f" | grep -qx -- '---' || { echo "no frontmatter: $f"; exit 1; }
+              grep -q '^name: ' "$f" && grep -q '^description: ' "$f" || { echo "missing name/description: $f"; exit 1; }
+            done
+            touch $out
+          '';
         });
 
       devShells = forAll (pkgs: {
