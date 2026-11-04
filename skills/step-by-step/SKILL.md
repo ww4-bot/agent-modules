@@ -192,8 +192,13 @@ shows owner, mode, size and trailing newline, never a value.
 checks before writing, and it writes nothing if the check fails:
 
 ```
-read -rsp 'Paste token (hidden), then Enter: ' T && echo && T=$(printf %s "$T" | tr -d '\r\n\t ') && [ ${#T} -eq 40 ] && printf %s "$T" | sudo install -o root -g root -m 0400 /dev/stdin /var/lib/app/token && echo "OK $(sudo wc -c < /var/lib/app/token) bytes" || echo "NOT WRITTEN"; unset T
+read -rsp 'Paste token (hidden), then Enter: ' T && echo && T=$(printf %s "$T" | tr -d '\r\n\t ') && [ ${#T} -eq 40 ] && printf %s "$T" | sudo install -o root -g root -m 0400 /dev/stdin /var/lib/app/token && echo "OK $(sudo stat -c %s /var/lib/app/token) bytes" || echo "NOT WRITTEN"; unset T
 ```
+
+Read a root-only file back with `sudo stat`, never `sudo wc -c < file`: the
+`<` is opened by the user's own shell before sudo runs, so it fails with
+`Permission denied` and the check prints `OK  bytes` with no number, after
+the write has already succeeded.
 
 If a secret has several values, or needs annotations, stage a template with
 empty values and have him fill it in place (`SITE.md` names the convention).
