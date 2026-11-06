@@ -109,6 +109,8 @@ let
       ]
       ++ lib.concatMap (c: [ "Bash(${c}:*)" "Bash(sudo ${c}:*)" ]) cfg.deniedApplyCommands
       ++ cfg.extraDeny;
+      # Beats `allow`, so each call waits for the operator even in auto mode.
+      ask = cfg.extraAsk;
     };
     hooks = {
       PreToolUse = [{
@@ -179,6 +181,13 @@ in
     extraDeny = lib.mkOption {
       type = lib.types.listOf lib.types.str; default = [ ];
       description = "Extra Claude Code deny rules appended to the managed list.";
+    };
+    extraAsk = lib.mkOption {
+      type = lib.types.listOf lib.types.str; default = [ ];
+      description = ''
+        Claude Code rules that need the operator's approval on every call. For an
+        action the agent may take, but only when told to.
+      '';
     };
     etcDir = lib.mkOption {
       type = lib.types.str; default = "/etc/claude-code"; internal = true;
